@@ -143,37 +143,13 @@ add_custom_command(
 	COMMENT "ROMFS: copying, generating airframes"
 	)
 
+if(EXISTS ${PX4_BOARD_DIR}/extras/${PX4_BOARD_VENDOR}_${PX4_BOARD_MODEL}_bootloader.bin)
+	set(BOARD_FIRMWARE_BIN "${PX4_BOARD_VENDOR}_${PX4_BOARD_MODEL}_bootloader.bin")
+	configure_file(${PX4_SOURCE_DIR}/platforms/nuttx/init/rc.board_bootloader_upgrade.in ${romfs_gen_root_dir}/init.d/rc.board_bootloader_upgrade @ONLY)
+endif()
+
 # copy extras into ROMFS
 set(extras_dependencies)
-
-# copy px4io binary if configured
-if(config_io_board)
-	list(APPEND extras_dependencies
-		copy_px4io_bin
-		${fw_io_bin}
-	)
-	file(RELATIVE_PATH iofw_file_relative ${PX4_SOURCE_DIR} ${fw_io_bin})
-	message(STATUS "ROMFS:  Adding ${iofw_file_relative} -> /etc/extras/${config_io_board}.bin")
-endif()
-
-
-# board bootloader (built or included)
-if(TARGET copy_bootloader_bin)
-
-	if(board_bootloader_firmware)
-		file(RELATIVE_PATH bl_file_relative ${PX4_SOURCE_DIR} ${board_bootloader_firmware})
-		message(STATUS "ROMFS:  Adding ${bl_file_relative} -> /etc/extras/bootloader.bin")
-	else()
-		file(RELATIVE_PATH bl_file_relative ${PX4_SOURCE_DIR} ${bootloader_bin})
-		message(STATUS "ROMFS:  Adding ${bl_file_relative} -> /etc/extras/bootloader.bin")
-	endif()
-
-	list(APPEND extras_dependencies
-		copy_bootloader_bin
-		${bootloader_bin}
-	)
-endif()
-
 
 # optional board architecture defaults
 set(board_arch_rc_file "rc.board_arch_defaults")
@@ -199,6 +175,7 @@ if(EXISTS "${PX4_SOURCE_DIR}/platforms/${PX4_PLATFORM}/init/${CONFIG_ARCH_CHIP}/
 endif()
 
 
+# board custom init files
 set(OPTIONAL_BOARD_RC)
 list(APPEND OPTIONAL_BOARD_RC
 	rc.board_defaults
@@ -231,6 +208,38 @@ foreach(board_rc_file ${OPTIONAL_BOARD_RC})
 	endif()
 
 endforeach()
+
+
+# board extras
+set(OPTIONAL_BOARD_EXTRAS)
+file(GLOB OPTIONAL_BOARD_EXTRAS ${PX4_BOARD_DIR}/extras/*)
+
+foreach(board_extra_file ${OPTIONAL_BOARD_EXTRAS})
+
+	if(EXISTS "${board_extra_file}")
+		file(RELATIVE_PATH extra_file_base_name ${PX4_BOARD_DIR}/extras/ ${board_extra_file})
+		file(RELATIVE_PATH extra_file_relative_source ${PX4_SOURCE_DIR} ${board_extra_file})
+		message(STATUS "ROMFS:  Adding ${extra_file_relative_source} -> /etc/extras/${extra_file_base_name}")
+
+		add_custom_command(
+			OUTPUT
+				${romfs_gen_root_dir}/extras/${extra_file_base_name}
+				${extra_file_base_name}.stamp
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PX4_BOARD_DIR}/extras/${extra_file_base_name} ${romfs_gen_root_dir}/extras/${extra_file_base_name}
+			COMMAND ${CMAKE_COMMAND} -E touch ${extra_file_base_name}.stamp
+			DEPENDS
+				${board_extra_file}
+				romfs_copy.stamp
+			COMMENT "ROMFS: copying ${board_extra_file}"
+		)
+
+		list(APPEND extras_dependencies
+			${extra_file_base_name}.stamp
+		)
+	endif()
+
+endforeach()
+
 
 
 if(config_uavcan_peripheral_firmware)
