@@ -67,7 +67,7 @@ public:
 	~LedController()
 	{
 		perf_free(_led_control_sub_lost_perf);
-	};
+	}
 
 	/**
 	 * get maxium time between two consecutive calls to update() in us.
